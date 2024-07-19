@@ -1,0 +1,56 @@
+from typing import List
+# from urllib import response
+from ninja import NinjaAPI, Query
+
+from ninja_simple_jwt.auth.views.api import mobile_auth_router
+from ninja_simple_jwt.auth.ninja_auth import HttpJwtAuth
+
+from .models import User,Customer,Address
+
+from .schemas import CustomerOut, CustomerResp, AddressIn, AddressResp
+
+api = NinjaAPI()
+api.add_router("/auth/", mobile_auth_router)
+apiAuth = HttpJwtAuth()
+
+@api.get("hello")
+def helloWorld(request):
+    return{'hello':'world'}
+
+@api.get("customers.json", auth=apiAuth, response=CustomerResp)
+def getAllCustomers(request, ids:str):
+    int_ids = ids.split(',')
+    customers = Customer.objects.filter(id__in=int_ids)
+    return {'customers': customers}
+
+@api.post('customers/{id_cust}/addresses.json', auth=apiAuth, response=AddressResp)
+def addCustomer(request, id_cust:int, data:AddressIn):
+    cust = Customer.objects.get(pk=id_cust)
+    newAddr = Address.objects.create(
+                customer=cust,
+                address1=data.address1,
+                address2=data.address2,
+                city=data.city,
+                province=data.province,
+                company=data.company,
+                phone=data.phone,
+                zip=data.zip
+            )
+    return {"customer_address": newAddr}
+
+@api.put('customers/{id_cust}/addresses/{id_addr}/default.json', auth=apiAuth, response=AddressResp)
+def setDefaultAddr(request, id_cust:int, id_addr:int):
+    addr = Address.objects.get(pk=id_addr)
+    addr.default =True
+    addr.save()
+    other = Address.objects.filter(customer_id=id_cust).exclude(id=id_addr)
+    for data in other:
+        data.default = False
+        data.save()
+
+    return {"customer_address": addr}
+
+@api.delete('customers/{id_cust}/addresses/{id_addr}.json')
+def deleteAddr(request, id_cust:int, id_addr:int):
+    Address.objects.get(pk=id_addr).delete()
+    return {}
